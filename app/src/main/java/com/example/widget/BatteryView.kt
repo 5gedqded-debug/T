@@ -1,6 +1,7 @@
 package com.example.widget
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -12,6 +13,9 @@ import android.view.View
  * Иконка батареи с процентом и значком молнии справа:
  *  - зарядка идёт  -> молния
  *  - зарядки нет   -> перечёркнутая молния
+ *
+ * Плашка контрастная и с рамкой, поэтому читается и на светлой,
+ * и на тёмной теме.
  */
 class BatteryView(context: Context) : View(context) {
 
@@ -19,7 +23,10 @@ class BatteryView(context: Context) : View(context) {
     private var charging = false
     private val d = resources.displayMetrics.density
 
-    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xCC000000.toInt() }
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeWidth = 1f * d
+    }
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; color = Color.WHITE; strokeWidth = 1.5f * d
     }
@@ -27,11 +34,32 @@ class BatteryView(context: Context) : View(context) {
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE; textSize = 9f * d; textAlign = Paint.Align.CENTER
         isFakeBoldText = true
+        setShadowLayer(2f * d, 0f, 0f, Color.BLACK) // читаемость на любой заливке
     }
     private val bolt = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val slash = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; color = Color.RED; strokeWidth = 2f * d
         strokeCap = Paint.Cap.ROUND
+    }
+
+    init {
+        setLayerType(LAYER_TYPE_SOFTWARE, null) // нужно для setShadowLayer
+        refreshTheme()
+    }
+
+    /** Подбирает цвета плашки под текущую тему (светлая / тёмная). */
+    fun refreshTheme() {
+        val dark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+        if (dark) {
+            // Тёмная тема: фон приложений почти чёрный, поэтому плашка светлее и с яркой рамкой
+            bg.color = 0xF0424242.toInt()
+            border.color = 0xB3FFFFFF.toInt()
+        } else {
+            bg.color = 0xE6000000.toInt()
+            border.color = 0x66FFFFFF
+        }
+        invalidate()
     }
 
     fun setState(level: Int, charging: Boolean) {
@@ -44,8 +72,11 @@ class BatteryView(context: Context) : View(context) {
         val w = width.toFloat()
         val h = height.toFloat()
 
-        // Фон-плашка
-        c.drawRoundRect(RectF(0f, 0f, w, h), 10 * d, 10 * d, bg)
+        // Фон-плашка с рамкой
+        val half = border.strokeWidth / 2
+        val plate = RectF(half, half, w - half, h - half)
+        c.drawRoundRect(plate, 10 * d, 10 * d, bg)
+        c.drawRoundRect(plate, 10 * d, 10 * d, border)
 
         // Корпус батареи
         val bx = 6 * d
@@ -53,8 +84,8 @@ class BatteryView(context: Context) : View(context) {
         val bw = 34 * d
         val bh = 16 * d
         c.drawRoundRect(RectF(bx, by, bx + bw, by + bh), 3 * d, 3 * d, stroke)
-        c.drawRect(bx + bw, by + 5 * d, bx + bw + 2.5f * d, by + bh - 5 * d,
-            fill.apply { color = Color.WHITE })
+        fill.color = Color.WHITE
+        c.drawRect(bx + bw, by + 5 * d, bx + bw + 2.5f * d, by + bh - 5 * d, fill)
 
         // Заливка уровня
         fill.color = when {
